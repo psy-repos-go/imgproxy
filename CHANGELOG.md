@@ -1,12 +1,27 @@
 # Changelog
 
 ## [Unreleased]
+### Add
+- (pro) Add [objects_position](https://docs.imgproxy.net/latest/usage/processing#objects-position) processing and info options.
+- (pro) Add [IMGPROXY_OBJECT_DETECTION_SWAP_RB](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_OBJECT_DETECTION_SWAP_RB) config.
+
+### Fixed
+- Fix detecting of width and height of HEIF images that include `irot` boxes.
+- Set `Error` status for errorred traces in OpenTelemetry.
+- Fix URL parsing error when a non-http(s) URL contains a `%` symbol outside of the percent-encoded sequence.
+- (pro) Fix opject detection accuracy when using YOLOv8 or YOLOv10 models.
+- (pro) Fix usage of the `obj` and `objw` gravity types inside the `crop` processing option.
+- (pro) Fix detecting of width and height when orientation is specified in EXIF but EXIF info is not requested.
+- (pro) Fix watermark shadow clipping.
+
+## [3.26.1] - 2024-10-28
 ### Changed
 - (pro) Improve `monochrome` and `duotone` processing options.
 
 ### Fixed
 - Fix loading log configs from local files and secret managers.
 - Fix detecting HEIF images with the `heix` brand.
+- Fix downloading source images when the image source requires a cookie challenge.
 - (pro) Fix playback of videos created from animations in Google Chrome.
 - (pro) Fix detecting of width and height of HEIF images that have orientation specified in EXIF.
 
