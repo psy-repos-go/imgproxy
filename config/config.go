@@ -54,6 +54,7 @@ var (
 	PngQuantize           bool
 	PngQuantizationColors int
 	AvifSpeed             int
+	JxlEffort             int
 	Quality               int
 	FormatQuality         map[imagetype.Type]int
 	StripMetadata         bool
@@ -64,11 +65,13 @@ var (
 	ReturnAttachment      bool
 	SvgFixUnsupported     bool
 
-	EnableWebpDetection bool
-	EnforceWebp         bool
-	EnableAvifDetection bool
-	EnforceAvif         bool
-	EnableClientHints   bool
+	AutoWebp          bool
+	EnforceWebp       bool
+	AutoAvif          bool
+	EnforceAvif       bool
+	AutoJxl           bool
+	EnforceJxl        bool
+	EnableClientHints bool
 
 	PreferredFormats []imagetype.Type
 
@@ -252,9 +255,14 @@ func Reset() {
 	PngInterlaced = false
 	PngQuantize = false
 	PngQuantizationColors = 256
-	AvifSpeed = 9
+	AvifSpeed = 8
+	JxlEffort = 4
 	Quality = 80
-	FormatQuality = map[imagetype.Type]int{imagetype.AVIF: 65}
+	FormatQuality = map[imagetype.Type]int{
+		imagetype.WEBP: 79,
+		imagetype.AVIF: 63,
+		imagetype.JXL:  77,
+	}
 	StripMetadata = true
 	KeepCopyright = true
 	StripColorProfile = true
@@ -263,10 +271,12 @@ func Reset() {
 	ReturnAttachment = false
 	SvgFixUnsupported = false
 
-	EnableWebpDetection = false
+	AutoWebp = false
 	EnforceWebp = false
-	EnableAvifDetection = false
+	AutoAvif = false
 	EnforceAvif = false
+	AutoJxl = false
+	EnforceJxl = false
 	EnableClientHints = false
 
 	PreferredFormats = []imagetype.Type{
@@ -475,6 +485,7 @@ func Configure() error {
 	configurators.Bool(&PngQuantize, "IMGPROXY_PNG_QUANTIZE")
 	configurators.Int(&PngQuantizationColors, "IMGPROXY_PNG_QUANTIZATION_COLORS")
 	configurators.Int(&AvifSpeed, "IMGPROXY_AVIF_SPEED")
+	configurators.Int(&JxlEffort, "IMGPROXY_JXL_EFFORT")
 	configurators.Int(&Quality, "IMGPROXY_QUALITY")
 	if err := configurators.ImageTypesQuality(FormatQuality, "IMGPROXY_FORMAT_QUALITY"); err != nil {
 		return err
@@ -487,10 +498,21 @@ func Configure() error {
 	configurators.Bool(&ReturnAttachment, "IMGPROXY_RETURN_ATTACHMENT")
 	configurators.Bool(&SvgFixUnsupported, "IMGPROXY_SVG_FIX_UNSUPPORTED")
 
-	configurators.Bool(&EnableWebpDetection, "IMGPROXY_ENABLE_WEBP_DETECTION")
+	if _, ok := os.LookupEnv("IMGPROXY_ENABLE_WEBP_DETECTION"); ok {
+		log.Warning("IMGPROXY_ENABLE_WEBP_DETECTION is deprecated, use IMGPROXY_AUTO_WEBP instead")
+		configurators.Bool(&AutoWebp, "IMGPROXY_ENABLE_WEBP_DETECTION")
+	}
+	if _, ok := os.LookupEnv("IMGPROXY_ENABLE_AVIF_DETECTION"); ok {
+		log.Warning("IMGPROXY_ENABLE_AVIF_DETECTION is deprecated, use IMGPROXY_AUTO_AVIF instead")
+		configurators.Bool(&AutoAvif, "IMGPROXY_ENABLE_AVIF_DETECTION")
+	}
+
+	configurators.Bool(&AutoWebp, "IMGPROXY_AUTO_WEBP")
 	configurators.Bool(&EnforceWebp, "IMGPROXY_ENFORCE_WEBP")
-	configurators.Bool(&EnableAvifDetection, "IMGPROXY_ENABLE_AVIF_DETECTION")
+	configurators.Bool(&AutoAvif, "IMGPROXY_AUTO_AVIF")
 	configurators.Bool(&EnforceAvif, "IMGPROXY_ENFORCE_AVIF")
+	configurators.Bool(&AutoJxl, "IMGPROXY_AUTO_JXL")
+	configurators.Bool(&EnforceJxl, "IMGPROXY_ENFORCE_JXL")
 	configurators.Bool(&EnableClientHints, "IMGPROXY_ENABLE_CLIENT_HINTS")
 
 	configurators.URLPath(&HealthCheckPath, "IMGPROXY_HEALTH_CHECK_PATH")
@@ -706,9 +728,15 @@ func Configure() error {
 	}
 
 	if AvifSpeed < 0 {
-		return fmt.Errorf("Avif speed should be greater than 0, now - %d\n", AvifSpeed)
+		return fmt.Errorf("Avif speed should be greater than or equal to 0, now - %d\n", AvifSpeed)
 	} else if AvifSpeed > 9 {
 		return fmt.Errorf("Avif speed can't be greater than 9, now - %d\n", AvifSpeed)
+	}
+
+	if JxlEffort < 1 {
+		return fmt.Errorf("JXL effort should be greater than 0, now - %d\n", JxlEffort)
+	} else if JxlEffort > 9 {
+		return fmt.Errorf("JXL effort can't be greater than 9, now - %d\n", JxlEffort)
 	}
 
 	if Quality <= 0 {
