@@ -1,12 +1,43 @@
 # Changelog
 
 ## [Unreleased]
+### Add
+- Add JPEL XL (JXL) support.
+- Add [IMGPROXY_AUTO_JXL](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_AUTO_JXL), [IMGPROXY_ENFORCE_JXL](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_ENFORCE_JXL), and [IMGPROXY_JXL_EFFORT](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_JXL_EFFORT) configs.
+- (pro) Add [IMGPROXY_AUTOQUALITY_JXL_NET](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_AUTOQUALITY_JXL_NET) config.
+- (pro) Add [objects_position](https://docs.imgproxy.net/latest/usage/processing#objects-position) processing and info options.
+- (pro) Add [IMGPROXY_OBJECT_DETECTION_SWAP_RB](https://docs.imgproxy.net/latest/configuration/options#IMGPROXY_OBJECT_DETECTION_SWAP_RB) config.
+
+### Changed
+- Change `IMGPROXY_AVIF_SPEED` default value to `8`.
+- Change `IMGPROXY_FORMAT_QUALITY` default value to `webp=79,avif=63,jxl=77`.
+- Rename `IMGPROXY_ENABLE_WEBP_DETECTION` to `IMGPROXY_AUTO_WEBP`. The old name is deprecated but still supported.
+- Rename `IMGPROXY_ENABLE_AVIF_DETECTION` to `IMGPROXY_AUTO_AVIF`. The old name is deprecated but still supported.
+- (pro) Change `IMGPROXY_AUTOQUALITY_FORMAT_MIN` default value to `avif=60`.
+- (pro) Change `IMGPROXY_AUTOQUALITY_FORMAT_MAX` default value to `avif=65`.
+- (pro) Use the last page/frame of the source image when the `page` processing option value is greater than or equal to the number of pages/frames in the source image.
+
+### Fixed
+- Fix detecting of width and height of HEIF images that include `irot` boxes.
+- Set `Error` status for errorred traces in OpenTelemetry.
+- Fix URL parsing error when a non-http(s) URL contains a `%` symbol outside of the percent-encoded sequence.
+- (pro) Fix opject detection accuracy when using YOLOv8 or YOLOv10 models.
+- (pro) Fix usage of the `obj` and `objw` gravity types inside the `crop` processing option.
+- (pro) Fix detecting of width and height when orientation is specified in EXIF but EXIF info is not requested.
+- (pro) Fix watermark shadow clipping.
+
+### Deprecated
+- `IMGPROXY_ENABLE_WEBP_DETECTION` config is deprecated. Use `IMGPROXY_AUTO_WEBP` instead.
+- `IMGPROXY_ENABLE_AVIF_DETECTION` config is deprecated. Use `IMGPROXY_AUTO_AVIF` instead.
+
+## [3.26.1] - 2024-10-28
 ### Changed
 - (pro) Improve `monochrome` and `duotone` processing options.
 
 ### Fixed
 - Fix loading log configs from local files and secret managers.
 - Fix detecting HEIF images with the `heix` brand.
+- Fix downloading source images when the image source requires a cookie challenge.
 - (pro) Fix playback of videos created from animations in Google Chrome.
 - (pro) Fix detecting of width and height of HEIF images that have orientation specified in EXIF.
 
