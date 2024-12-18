@@ -54,14 +54,14 @@ type TrimOptions struct {
 }
 
 type WatermarkOptions struct {
-	Enabled bool
-	Opacity float64
-	Gravity GravityOptions
-	Scale   float64
+	Enabled  bool
+	Opacity  float64
+	Position GravityOptions
+	Scale    float64
 }
 
 func (wo WatermarkOptions) ShouldReplicate() bool {
-	return wo.Gravity.Type == GravityReplicate
+	return wo.Position.Type == GravityReplicate
 }
 
 type ProcessingOptions struct {
@@ -108,6 +108,8 @@ type ProcessingOptions struct {
 	EnforceWebP bool
 	PreferAvif  bool
 	EnforceAvif bool
+	PreferJxl   bool
+	EnforceJxl  bool
 
 	Filename         string
 	ReturnAttachment bool
@@ -142,7 +144,7 @@ func NewProcessingOptions() *ProcessingOptions {
 		Blur:              0,
 		Sharpen:           0,
 		Dpr:               1,
-		Watermark:         WatermarkOptions{Opacity: 1, Gravity: GravityOptions{Type: GravityCenter}},
+		Watermark:         WatermarkOptions{Opacity: 1, Position: GravityOptions{Type: GravityCenter}},
 		StripMetadata:     config.StripMetadata,
 		KeepCopyright:     config.KeepCopyright,
 		StripColorProfile: config.StripColorProfile,
@@ -217,38 +219,47 @@ func isGravityOffcetValid(gravity GravityType, offset float64) bool {
 	return gravity != GravityFocusPoint || (offset >= 0 && offset <= 1)
 }
 
-func parseGravity(g *GravityOptions, args []string) error {
+func parseGravity(g *GravityOptions, name string, args []string, allowedTypes []GravityType) error {
 	nArgs := len(args)
 
-	if nArgs > 3 {
-		return fmt.Errorf("Invalid gravity arguments: %v", args)
-	}
-
-	if t, ok := gravityTypes[args[0]]; ok {
+	if t, ok := gravityTypes[args[0]]; ok && slices.Contains(allowedTypes, t) {
 		g.Type = t
 	} else {
-		return fmt.Errorf("Invalid gravity: %s", args[0])
+		return fmt.Errorf("Invalid %s: %s", name, args[0])
 	}
 
-	if g.Type == GravitySmart && nArgs > 1 {
-		return fmt.Errorf("Invalid gravity arguments: %v", args)
-	} else if g.Type == GravityFocusPoint && nArgs != 3 {
-		return fmt.Errorf("Invalid gravity arguments: %v", args)
-	}
-
-	if nArgs > 1 {
-		if x, err := strconv.ParseFloat(args[1], 64); err == nil && isGravityOffcetValid(g.Type, x) {
-			g.X = x
-		} else {
-			return fmt.Errorf("Invalid gravity X: %s", args[1])
+	switch g.Type {
+	case GravitySmart:
+		if nArgs > 1 {
+			return fmt.Errorf("Invalid %s arguments: %v", name, args)
 		}
-	}
+		g.X, g.Y = 0.0, 0.0
 
-	if nArgs > 2 {
-		if y, err := strconv.ParseFloat(args[2], 64); err == nil && isGravityOffcetValid(g.Type, y) {
-			g.Y = y
-		} else {
-			return fmt.Errorf("Invalid gravity Y: %s", args[2])
+	case GravityFocusPoint:
+		if nArgs != 3 {
+			return fmt.Errorf("Invalid %s arguments: %v", name, args)
+		}
+		fallthrough
+
+	default:
+		if nArgs > 3 {
+			return fmt.Errorf("Invalid %s arguments: %v", name, args)
+		}
+
+		if nArgs > 1 {
+			if x, err := strconv.ParseFloat(args[1], 64); err == nil && isGravityOffcetValid(g.Type, x) {
+				g.X = x
+			} else {
+				return fmt.Errorf("Invalid %s X: %s", name, args[1])
+			}
+		}
+
+		if nArgs > 2 {
+			if y, err := strconv.ParseFloat(args[2], 64); err == nil && isGravityOffcetValid(g.Type, y) {
+				g.Y = y
+			} else {
+				return fmt.Errorf("Invalid %s Y: %s", name, args[2])
+			}
 		}
 	}
 
@@ -263,13 +274,7 @@ func parseExtend(opts *ExtendOptions, name string, args []string) error {
 	opts.Enabled = parseBoolOption(args[0])
 
 	if len(args) > 1 {
-		if err := parseGravity(&opts.Gravity, args[1:]); err != nil {
-			return err
-		}
-
-		if !opts.Gravity.Type.OkForExtend() {
-			return fmt.Errorf("%s doesn't support %s gravity", name, opts.Gravity.Type)
-		}
+		return parseGravity(&opts.Gravity, name+" gravity", args[1:], extendGravityTypes)
 	}
 
 	return nil
@@ -431,22 +436,10 @@ func applyDprOption(po *ProcessingOptions, args []string) error {
 }
 
 func applyGravityOption(po *ProcessingOptions, args []string) error {
-	if err := parseGravity(&po.Gravity, args); err != nil {
-		return err
-	}
-
-	if !po.Gravity.Type.OkForCrop() {
-		return fmt.Errorf("%s gravity type is not applicable to gravity", po.Gravity.Type)
-	}
-
-	return nil
+	return parseGravity(&po.Gravity, "gravity", args, cropGravityTypes)
 }
 
 func applyCropOption(po *ProcessingOptions, args []string) error {
-	if len(args) > 5 {
-		return fmt.Errorf("Invalid crop arguments: %v", args)
-	}
-
 	if w, err := strconv.ParseFloat(args[0], 64); err == nil && w >= 0 {
 		po.Crop.Width = w
 	} else {
@@ -462,12 +455,7 @@ func applyCropOption(po *ProcessingOptions, args []string) error {
 	}
 
 	if len(args) > 2 {
-		if err := parseGravity(&po.Crop.Gravity, args[2:]); err != nil {
-			return err
-		}
-		if !po.Crop.Gravity.Type.OkForCrop() {
-			return fmt.Errorf("%s gravity type is not applicable to crop", po.Crop.Gravity.Type)
-		}
+		return parseGravity(&po.Crop.Gravity, "crop gravity", args[2:], cropGravityTypes)
 	}
 
 	return nil
@@ -731,8 +719,8 @@ func applyWatermarkOption(po *ProcessingOptions, args []string) error {
 	}
 
 	if len(args) > 1 && len(args[1]) > 0 {
-		if g, ok := gravityTypes[args[1]]; ok && g.OkForWatermark() {
-			po.Watermark.Gravity.Type = g
+		if g, ok := gravityTypes[args[1]]; ok && slices.Contains(watermarkGravityTypes, g) {
+			po.Watermark.Position.Type = g
 		} else {
 			return fmt.Errorf("Invalid watermark position: %s", args[1])
 		}
@@ -740,7 +728,7 @@ func applyWatermarkOption(po *ProcessingOptions, args []string) error {
 
 	if len(args) > 2 && len(args[2]) > 0 {
 		if x, err := strconv.ParseFloat(args[2], 64); err == nil {
-			po.Watermark.Gravity.X = x
+			po.Watermark.Position.X = x
 		} else {
 			return fmt.Errorf("Invalid watermark X offset: %s", args[2])
 		}
@@ -748,7 +736,7 @@ func applyWatermarkOption(po *ProcessingOptions, args []string) error {
 
 	if len(args) > 3 && len(args[3]) > 0 {
 		if y, err := strconv.ParseFloat(args[3], 64); err == nil {
-			po.Watermark.Gravity.Y = y
+			po.Watermark.Position.Y = y
 		} else {
 			return fmt.Errorf("Invalid watermark Y offset: %s", args[3])
 		}
@@ -1093,13 +1081,18 @@ func defaultProcessingOptions(headers http.Header) (*ProcessingOptions, error) {
 	headerAccept := headers.Get("Accept")
 
 	if strings.Contains(headerAccept, "image/webp") {
-		po.PreferWebP = config.EnableWebpDetection || config.EnforceWebp
+		po.PreferWebP = config.AutoWebp || config.EnforceWebp
 		po.EnforceWebP = config.EnforceWebp
 	}
 
 	if strings.Contains(headerAccept, "image/avif") {
-		po.PreferAvif = config.EnableAvifDetection || config.EnforceAvif
+		po.PreferAvif = config.AutoAvif || config.EnforceAvif
 		po.EnforceAvif = config.EnforceAvif
+	}
+
+	if strings.Contains(headerAccept, "image/jxl") {
+		po.PreferJxl = config.AutoJxl || config.EnforceJxl
+		po.EnforceJxl = config.EnforceJxl
 	}
 
 	if config.EnableClientHints {
